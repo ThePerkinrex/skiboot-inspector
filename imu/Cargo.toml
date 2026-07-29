@@ -1,0 +1,48 @@
+[package]
+name = "imu"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+static_cell = "2.1.1"
+# nmea0183 = { version = "0.6.0", features = ["mtk"] }
+mpu6050-dmp = { version = "0.6.1", features = ["async"] }
+
+bt-constants = { path = "../bt-constants" }
+
+bt-hci = "0.8.0"
+embassy-executor = { version = "0.10.0", features = ["defmt"] }
+embassy-time = { version = "0.5.0", features = ["defmt"] }
+embassy-sync = { version = "0.7.2", features = ["defmt"] }
+
+
+esp-alloc = { version = "0.10.0", features = ["defmt"] }
+esp-backtrace = { version = "0.19.0", features = [
+	"defmt",
+	"esp32c3",
+	"panic-handler",
+] }
+esp-println = { version = "0.17.0", features = ["defmt-espflash", "esp32c3"] }
+esp-radio = { version = "0.18.0", features = [
+	"ble",
+	"defmt",
+	"esp-alloc",
+	"esp32c3",
+	"unstable",
+] }
+trouble-host = { version = "0.6.0", features = ["gatt"] }
+
+esp-hal = { version = "~1.1.0", features = ["defmt", "esp32c3", "unstable"] }
+
+esp-rtos = { version = "0.3.0", features = [
+	"defmt",
+	"embassy",
+	"esp-alloc",
+	"esp-radio",
+	"esp32c3",
+] }
+
+embedded-io = { version = "0.7.1", features = ["defmt"] }
+embedded-io-async = { version = "0.7.0", features = ["defmt"] }
+
+defmt = "1.0.1"

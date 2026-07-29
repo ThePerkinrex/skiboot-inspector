@@ -1,11 +1,11 @@
 [package]
 edition      = "2024"
-name         = "skiboot-master-ctrl"
+name         = "skiboot-slave-ctrl"
 rust-version = "1.88"
 version      = "0.1.0"
 
 [[bin]]
-name = "skiboot-master-ctrl"
+name = "skiboot-slave-ctrl"
 path = "./src/bin/main.rs"
 
 [dependencies]
@@ -45,8 +45,8 @@ trouble-host = { version = "0.6.0", features = ["gatt"] }
 
 critical-section = "1.2.0"
 static_cell      = "2.1.1"
-nmea0183 = { version = "0.6.0", features = ["mtk"] }
+# nmea0183 = { version = "0.6.0", features = ["mtk"] }
 mpu6050-dmp = { version = "0.6.1", features = ["async"] }
 
-
 bt-constants = {path = "../bt-constants"}
+
