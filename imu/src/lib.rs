@@ -58,8 +58,9 @@ pub async fn imu_task(i2c: I2c<'static, esp_hal::Async>) {
 }
 
 
-#[gatt_service(uuid = "180f")]
+
+#[gatt_service(uuid = bt_constants::MOTION_SERVICE_UUID)]
 struct BatteryService {
-    #[characteristic(uuid = "2a19", read, notify, value = 10)]
+    #[characteristic(uuid = bt_constants::IMU_DATA_CHAR_UUID, read, notify, value = 10)]
     level: u8,
 }

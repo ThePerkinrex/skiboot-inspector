@@ -16,13 +16,22 @@ use esp_hal::clock::CpuClock;
 use esp_hal::timer::timg::TimerGroup;
 use esp_println as _;
 use esp_radio::ble::controller::BleConnector;
-use skiboot_slave_ctrl::{imu::{self, I2CConnection}};
+use skiboot_slave_ctrl::imu::{self, I2CConnection};
+use static_cell::StaticCell;
 use trouble_host::prelude::*;
 
 extern crate alloc;
 
 const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 1;
+static RESOURCES: StaticCell<
+    HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
+> = StaticCell::new();
+static STACK: StaticCell<Stack<
+        'static,
+        ExternalController<BleConnector<'static>, 1>,
+        DefaultPacketPool,
+    >> = StaticCell::new();
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
@@ -66,16 +75,21 @@ async fn main(spawner: Spawner) -> ! {
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let ble_controller = ExternalController::<_, 1>::new(transport);
-    let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
-        HostResources::new();
-    let stack = trouble_host::new(ble_controller, &mut resources);
+    let resources = RESOURCES.init(HostResources::new());
+    let stack = STACK.init(trouble_host::new(ble_controller, resources));
     let host = stack.build();
 
     spawner.spawn(ble_task(host.runner).unwrap());
 
     // gps::setup(GPSConnection{ UART1: peripherals.UART1, GPIO20: peripherals.GPIO20, GPIO21: peripherals.GPIO21 }, &spawner);
-    imu::setup(I2CConnection { I2C0: peripherals.I2C0, GPIO8: peripherals.GPIO8, GPIO9: peripherals.GPIO9 }, &spawner);
-    
+    imu::setup(
+        I2CConnection {
+            I2C0: peripherals.I2C0,
+            GPIO8: peripherals.GPIO8,
+            GPIO9: peripherals.GPIO9,
+        },
+        &spawner,
+    );
 
     // TODO: Spawn some tasks
     let _ = spawner;
@@ -88,9 +102,14 @@ async fn main(spawner: Spawner) -> ! {
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.1.0/examples
 }
 
-
 #[embassy_executor::task]
-async fn ble_task(mut runner: trouble_host::prelude::Runner<'static, ExternalController<BleConnector<'static>, 1>, DefaultPacketPool>) {
+async fn ble_task(
+    mut runner: trouble_host::prelude::Runner<
+        'static,
+        ExternalController<BleConnector<'static>, 1>,
+        DefaultPacketPool,
+    >,
+) {
     loop {
         runner.run().await.ok();
     }
