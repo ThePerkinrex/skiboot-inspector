@@ -6,7 +6,7 @@ resolver = "3"
 [profile.dev]
 # The default debug profile is too slow and too big for resource-constrained devices.
 # Always build with some optimizations enabled.
-opt-level = "s"
+opt-level = 3
 
 [profile.release]
 codegen-units = 1     # LLVM can perform better optimizations using a single thread

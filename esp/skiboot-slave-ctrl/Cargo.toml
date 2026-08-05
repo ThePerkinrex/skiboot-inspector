@@ -8,6 +8,9 @@ version      = "0.1.0"
 name = "skiboot-slave-ctrl"
 path = "./src/bin/main.rs"
 
+[profile.dev.package.esp-radio]
+opt-level = 3
+
 [dependencies]
 esp-hal = { version = "~1.1.0", features = ["defmt", "esp32c3", "unstable"] }
 
@@ -25,6 +28,8 @@ esp-bootloader-esp-idf = { version = "0.5.0", features = ["defmt", "esp32c3"] }
 bt-hci = "0.8.0"
 embassy-executor = { version = "0.10.0", features = ["defmt"] }
 embassy-time = { version = "0.5.0", features = ["defmt"] }
+embassy-sync = { version = "0.7.2", features = ["defmt"] }
+
 embedded-io = { version = "0.7.1", features = ["defmt"] }
 embedded-io-async = { version = "0.7.0", features = ["defmt"] }
 esp-alloc = { version = "0.10.0", features = ["defmt"] }
@@ -41,7 +46,7 @@ esp-radio = { version = "0.18.0", features = [
   "esp32c3",
   "unstable",
 ] }
-trouble-host = { version = "0.6.0", features = ["gatt"] }
+trouble-host = { version = "0.6.0", features = ["gatt", "defmt"] }
 
 critical-section = "1.2.0"
 static_cell      = "2.1.1"
@@ -49,4 +54,6 @@ static_cell      = "2.1.1"
 mpu6050-dmp = { version = "0.6.1", features = ["async"] }
 
 bt-constants = {path = "../bt-constants"}
+imu = {path = "../imu"}
+embassy-futures = { version = "0.1.2", features = ["defmt"] }
 

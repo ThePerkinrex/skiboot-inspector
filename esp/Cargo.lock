@@ -77,6 +77,7 @@ dependencies = [
 name = "bt-constants"
 version = "0.1.0"
 dependencies = [
+ "num_enum",
  "uuid",
 ]
 
@@ -1512,6 +1513,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a75c0c24f43578e6cd3f518f35ab9f17fd95124cc1a66e04143b498cd37eec4"
 dependencies = [
+ "defmt 0.3.100",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "libm",
@@ -1565,6 +1567,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d0bca838442ec211fa11de3a8b0e0e8f3a4522575b5c4c06ed722e005036f26"
+dependencies = [
+ "num_enum_derive",
+ "rustversion",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1871,6 +1894,8 @@ dependencies = [
  "critical-section",
  "defmt 1.1.1",
  "embassy-executor",
+ "embassy-futures",
+ "embassy-sync 0.7.2",
  "embassy-time",
  "embedded-io 0.7.1",
  "embedded-io-async 0.7.0",
@@ -1881,6 +1906,7 @@ dependencies = [
  "esp-println",
  "esp-radio",
  "esp-rtos",
+ "imu",
  "mpu6050-dmp",
  "static_cell",
  "trouble-host",
@@ -2130,6 +2156,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1df7817cead4b83dfbeeaa59736ecbc97c30b21dc3bfc0cc2ce8a6687f70b37a"
 dependencies = [
  "bt-hci",
+ "defmt 1.1.1",
  "embassy-futures",
  "embassy-sync 0.7.2",
  "embassy-time",
