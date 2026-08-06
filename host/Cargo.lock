@@ -453,6 +453,7 @@ dependencies = [
  "anyhow",
  "bt-constants",
  "btleplug",
+ "bytemuck",
  "log",
  "rand",
  "tokio",

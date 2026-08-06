@@ -1,6 +1,7 @@
 mod app;
 mod imu;
 mod state;
+mod vertex;
 
 use tracing::info;
 
