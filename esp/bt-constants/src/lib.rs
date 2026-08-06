@@ -83,24 +83,30 @@ impl FromBytesLe<12> for Tri {
 pub struct ImuData {
     pub accel: Tri,
     pub gyro: Tri,
+    pub ypr: Tri,
+    pub gravity: Tri
 }
 
-impl ToBytesLe<24> for ImuData {
-    fn to_bytes_le(self) -> [u8; 24] {
-        let mut data = [0; 24];
+impl ToBytesLe<48> for ImuData {
+    fn to_bytes_le(self) -> [u8; 48] {
+        let mut data = [0; 48];
 
         data[0..12].copy_from_slice(&self.accel.to_bytes_le());
         data[12..24].copy_from_slice(&self.gyro.to_bytes_le());
+        data[24..36].copy_from_slice(&self.ypr.to_bytes_le());
+        data[36..48].copy_from_slice(&self.gravity.to_bytes_le());
 
         data
     }
 }
 
-impl FromBytesLe<24> for ImuData {
-    fn from_le_bytes(x: &[u8; 24]) -> Self {
+impl FromBytesLe<48> for ImuData {
+    fn from_le_bytes(x: &[u8; 48]) -> Self {
         Self {
             accel: Tri::from_le_bytes(x[0..12].try_into().unwrap()),
             gyro: Tri::from_le_bytes(x[12..24].try_into().unwrap()),
+            ypr: Tri::from_le_bytes(x[24..36].try_into().unwrap()),
+            gravity: Tri::from_le_bytes(x[36..48].try_into().unwrap()),
         }
     }
 }

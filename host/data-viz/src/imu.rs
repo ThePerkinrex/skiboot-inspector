@@ -55,7 +55,7 @@ pub async fn run() -> anyhow::Result<()> {
     time::sleep(Duration::from_secs(2)).await;
 
     // find the device we're interested in
-    let light = find_light(&central).await.unwrap();
+    let light = find_boot(&central).await.unwrap();
 
     // connect to the device
     light.connect().await?;
@@ -145,7 +145,7 @@ pub async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn find_light(central: &Adapter) -> Option<Peripheral> {
+async fn find_boot(central: &Adapter) -> Option<Peripheral> {
     for p in central.peripherals().await.unwrap() {
         if p.properties()
             .await

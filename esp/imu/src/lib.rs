@@ -17,13 +17,7 @@ use esp_hal::{
     peripherals::{GPIO8, GPIO9, I2C0},
 };
 use mpu6050_dmp::{
-    accel::{Accel, AccelF32, AccelFullScale},
-    calibration::{CalibrationParameters, CalibrationThreshold},
-    config::DigitalLowPassFilter,
-    gyro::{Gyro, GyroF32, GyroFullScale},
-    quaternion::Quaternion,
-    sensor_async::Mpu6050,
-    yaw_pitch_roll::YawPitchRoll,
+    accel::{Accel, AccelF32, AccelFullScale}, calibration::{CalibrationParameters, CalibrationThreshold}, config::DigitalLowPassFilter, gravity::Gravity, gyro::{Gyro, GyroF32, GyroFullScale}, quaternion::Quaternion, sensor_async::Mpu6050, yaw_pitch_roll::YawPitchRoll,
 };
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
@@ -64,6 +58,22 @@ const fn gyro_to_tri(gyro: &GyroF32) -> Tri {
         x: gyro.x(),
         y: gyro.y(),
         z: gyro.z(),
+    }
+}
+
+const fn ypr_to_tri(ypr: &YawPitchRoll) -> Tri {
+    Tri {
+        x: ypr.yaw,
+        y: ypr.pitch,
+        z: ypr.roll,
+    }
+}
+
+const fn gravity_to_tri(gravity: &Gravity) -> Tri {
+    Tri {
+        x: gravity.x,
+        y: gravity.y,
+        z: gravity.z,
     }
 }
 
@@ -243,6 +253,8 @@ pub async fn imu_task(
                         signal.signal(ImuData {
                             accel: accel_to_tri(&accel),
                             gyro: gyro_to_tri(&gyro),
+                            ypr: ypr_to_tri(&ypr),
+                            gravity: gravity_to_tri(&gravity)
                             // Add your calculated orientation fields to ImuData here, e.g.:
                             // yaw: ypr.yaw,
                             // pitch: ypr.pitch,
