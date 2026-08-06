@@ -16,7 +16,10 @@ use esp_hal::clock::CpuClock;
 use esp_hal::timer::timg::TimerGroup;
 use esp_println as _;
 use esp_radio::ble::controller::BleConnector;
-use skiboot_master_ctrl::{gps::{self, GPSConnection}, imu::{self, I2CConnection}};
+use skiboot_master_ctrl::{
+    gps::{self, GPSConnection},
+    imu::{self, I2CConnection},
+};
 use trouble_host::prelude::*;
 
 extern crate alloc;
@@ -70,9 +73,22 @@ async fn main(spawner: Spawner) -> ! {
         HostResources::new();
     let _stack = trouble_host::new(ble_controller, &mut resources);
 
-    gps::setup(GPSConnection{ UART1: peripherals.UART1, GPIO20: peripherals.GPIO20, GPIO21: peripherals.GPIO21 }, &spawner);
-    imu::setup(I2CConnection { I2C0: peripherals.I2C0, GPIO8: peripherals.GPIO8, GPIO9: peripherals.GPIO9 }, &spawner);
-    
+    gps::setup(
+        GPSConnection {
+            UART1: peripherals.UART1,
+            GPIO20: peripherals.GPIO20,
+            GPIO21: peripherals.GPIO21,
+        },
+        &spawner,
+    );
+    imu::setup(
+        I2CConnection {
+            I2C0: peripherals.I2C0,
+            GPIO8: peripherals.GPIO8,
+            GPIO9: peripherals.GPIO9,
+        },
+        &spawner,
+    );
 
     // TODO: Spawn some tasks
     let _ = spawner;

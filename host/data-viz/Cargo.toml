@@ -4,9 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.104"
 bt-constants = {path = "../../esp/bt-constants"}
 btleplug = "0.12.0"
+log = "0.4.33"
 rand = "0.10.2"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.19"
+tracing = "0.1.44"
+tracing-log = "0.2.0"
+tracing-subscriber = "0.3.23"
 uuid = "1.24.0"
+wgpu = "30.0.0"
+winit = "0.30.13"

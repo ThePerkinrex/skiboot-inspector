@@ -30,14 +30,13 @@ static MPU: StaticCell<Mpu6050<I2c<'static, esp_hal::Async>>> = StaticCell::new(
 #[allow(clippy::large_stack_frames)] // 4137 B
 #[embassy_executor::task]
 pub async fn imu_task(i2c: I2c<'static, esp_hal::Async>) {
-    let sensor =
-        match Box::pin(Mpu6050::new(i2c, mpu6050_dmp::address::Address::default())).await {
-            Ok(s) => s,
-            Err(e) => {
-                defmt::error!("MPU6050 init failed: {:?}", defmt::Debug2Format(&e));
-                panic!("mpu init failed");
-            }
-        };
+    let sensor = match Box::pin(Mpu6050::new(i2c, mpu6050_dmp::address::Address::default())).await {
+        Ok(s) => s,
+        Err(e) => {
+            defmt::error!("MPU6050 init failed: {:?}", defmt::Debug2Format(&e));
+            panic!("mpu init failed");
+        }
+    };
     let mpu = MPU.init(sensor); // full struct moved out of the async fn's own state
     mpu.initialize_dmp(&mut embassy_time::Delay).await.unwrap(); // or skip DMP, use raw accel/gyro reads
     loop {

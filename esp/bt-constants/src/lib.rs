@@ -7,7 +7,11 @@ use core::array::TryFromSliceError;
 macro_rules! UUID_DEF {
     ($name:ident = $uuid:literal) => {
         #[cfg(target_arch = "riscv32")]
-        pub const $name: [u8; 16] = {let mut a = uuid::uuid!($uuid).into_bytes(); a.reverse(); a};
+        pub const $name: [u8; 16] = {
+            let mut a = uuid::uuid!($uuid).into_bytes();
+            a.reverse();
+            a
+        };
         #[cfg(not(target_arch = "riscv32"))]
         pub const $name: uuid::Uuid = uuid::uuid!($uuid);
     };
@@ -36,14 +40,14 @@ pub trait FromBytesLe<const N: usize>: Sized {
 }
 
 pub trait ConvertBytesLe<const N: usize> {
-	type Bytes;
+    type Bytes;
 }
 
 impl<const N: usize, T> ConvertBytesLe<N> for T
 where
     T: Sized + ToBytesLe<N> + FromBytesLe<N>,
 {
-	type Bytes = [u8; N];
+    type Bytes = [u8; N];
 }
 
 #[cfg_attr(not(target_arch = "riscv32"), derive(Debug))]
@@ -100,4 +104,3 @@ impl FromBytesLe<24> for ImuData {
         }
     }
 }
-

@@ -19,8 +19,11 @@ use esp_hal::{
 use mpu6050_dmp::{
     accel::{Accel, AccelF32, AccelFullScale},
     calibration::{CalibrationParameters, CalibrationThreshold},
+    config::DigitalLowPassFilter,
     gyro::{Gyro, GyroF32, GyroFullScale},
+    quaternion::Quaternion,
     sensor_async::Mpu6050,
+    yaw_pitch_roll::YawPitchRoll,
 };
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
@@ -65,7 +68,7 @@ const fn gyro_to_tri(gyro: &GyroF32) -> Tri {
 }
 
 const ACCEL_SCALE: AccelFullScale = AccelFullScale::G2;
-const GYRO_SCALE: GyroFullScale = GyroFullScale::Deg1000;
+const GYRO_SCALE: GyroFullScale = GyroFullScale::Deg250;
 static COMMAND_CHANNEL: Channel<CriticalSectionRawMutex, ImuCommand, 20> = Channel::new();
 pub static STATUS_CHANNEL: Signal<CriticalSectionRawMutex, [u8; 32]> = Signal::new();
 
@@ -124,7 +127,7 @@ pub async fn imu_task(
     i2c: I2c<'static, esp_hal::Async>,
     signal: &'static Signal<CriticalSectionRawMutex, ImuData>,
 ) {
-    let mut status = Status::new(Accel::new(0, 0, 0), Gyro::new(0, 0, 0));
+    let mut status = Status::new(Accel::new(-3399, -3054, 947), Gyro::new(123, -46, -24));
     // let mut calibration = (Accel::new(0, 0, 0), Gyro::new(0, 0, 0));
     // status[0] = ImuStatus::Initializing.into();
     // STATUS_CHANNEL.signal(status);
@@ -138,7 +141,11 @@ pub async fn imu_task(
         }
     };
     let mpu = MPU.init(sensor); // full struct moved out of the async fn's own state
-    mpu.initialize_dmp(&mut embassy_time::Delay).await.unwrap(); // or skip DMP, use raw accel/gyro reads
+    mpu.set_sample_rate_divider(9).await.unwrap();
+    mpu.set_digital_lowpass_filter(DigitalLowPassFilter::Filter1)
+        .await
+        .unwrap();
+
     mpu.set_accel_full_scale(ACCEL_SCALE).await.unwrap();
     mpu.set_gyro_full_scale(GYRO_SCALE).await.unwrap();
 
@@ -148,31 +155,14 @@ pub async fn imu_task(
     mpu.set_gyro_calibration(&status.calibration().1)
         .await
         .unwrap();
+    mpu.initialize_dmp(&mut embassy_time::Delay).await.unwrap();
+    // mpu.enable_fifo().await.unwrap();
 
     status.set_status(ImuStatus::Ok);
     status.signal();
 
-    // if option_env!("CALIBRATE").is_some() {
-    //     let data = mpu
-    //         .calibrate(
-    //             &mut embassy_time::Delay,
-    //             &CalibrationParameters {
-    //                 accel_scale: ACCEL_SCALE,
-    //                 accel_threshold: CalibrationThreshold::from_accel_scale(ACCEL_SCALE),
-    //                 gyro_scale: GYRO_SCALE,
-    //                 gyro_threshold: CalibrationThreshold::from_gyro_scale(GYRO_SCALE),
-    //                 warmup_iterations: 10,
-    //                 iterations: 20,
-    //                 gravity: mpu6050_dmp::calibration::ReferenceGravity::XP,
-    //             },
-    //         )
-    //         .await
-    //         .unwrap();
-    //     info!("Calibrated: {:?} {:?}", data.0, data.1);
-
-    //     status[0] = ImuStatus::Ok.into();
-    //     STATUS_CHANNEL.signal(status);
-    // }
+    let mut fifo_buf = [0u8; 28];
+    let mut i = 0;
 
     loop {
         while let Ok(cmd) = COMMAND_CHANNEL.try_receive() {
@@ -191,7 +181,7 @@ pub async fn imu_task(
                                 gyro_scale: GYRO_SCALE,
                                 gyro_threshold: CalibrationThreshold::from_gyro_scale(GYRO_SCALE),
                                 warmup_iterations: 10,
-                                iterations: 20,
+                                iterations: 50,
                                 gravity: mpu6050_dmp::calibration::ReferenceGravity::XP,
                             },
                         )
@@ -205,17 +195,74 @@ pub async fn imu_task(
                 _ => {}
             }
         }
-        let accel = Box::pin(mpu.accel()).await.unwrap().scaled(ACCEL_SCALE);
-        let gyro = Box::pin(mpu.gyro())
-            .await
-            .unwrap()
-            .scaled(mpu6050_dmp::gyro::GyroFullScale::Deg250);
-        // info!("[IMU] Accel: {}", defmt::Debug2Format(&accel));
-        // info!("[IMU] Gyro: {}", defmt::Debug2Format(&gyro));
-        signal.signal(ImuData {
-            accel: accel_to_tri(&accel),
-            gyro: gyro_to_tri(&gyro),
-        });
+
+        // TODO replace with full DMP FIFO reading. ImuData will be expanded at a later date
+        // DMP 28-byte structure
+        // [QUAT W][      ][QUAT X][      ][QUAT Y][      ][QUAT Z][      ]
+        //   0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+
+        // [GYRO X][GxYRO Y][GYRO Z][ACC X ][ACC Y ][ACC Z ]
+        //  16  17  18  19  20  21  22  23  24  25  26  27
+        // let accel = Box::pin(mpu.accel()).await.unwrap().scaled(ACCEL_SCALE);
+        // let gyro = Box::pin(mpu.gyro())
+        //     .await
+        //     .unwrap()
+        //     .scaled(mpu6050_dmp::gyro::GyroFullScale::Deg250);
+        // // info!("[IMU] Accel: {}", defmt::Debug2Format(&accel));
+        // // info!("[IMU] Gyro: {}", defmt::Debug2Format(&gyro));
+        // signal.signal(ImuData {
+        //     accel: accel_to_tri(&accel),
+        //     gyro: gyro_to_tri(&gyro),
+        // });
+
+        // Check if enough data is available in the FIFO buffer
+        let fifo_count = mpu.get_fifo_count().await.unwrap_or(0);
+
+        if fifo_count >= 1024 {
+            // Reset FIFO if buffer overflows
+            let _ = mpu.reset_fifo().await;
+        } else {
+            while fifo_count >= fifo_buf.len() {
+                if mpu.read_fifo(&mut fifo_buf).await.is_ok() {
+                    // info!("Read FIFO");
+                    // Extract Quaternion (scaled floating-point [-1.0, 1.0])
+                    // info!("quat: {}", Quaternion::from_bytes(&fifo_buf[..16]));
+                    if let Some(quat) = Quaternion::from_bytes(&fifo_buf[..16]) {
+                        // Calculate gravity vector from quaternion
+                        let gravity = mpu6050_dmp::gravity::Gravity::from(quat);
+
+                        // Calculate Yaw, Pitch, Roll in radians
+                        let ypr = YawPitchRoll::from(quat);
+
+                        // If you still need calibrated accel/gyro along with orientation:
+                        let gyro = Gyro::from_bytes(fifo_buf[16..22].try_into().unwrap())
+                            .scaled(GYRO_SCALE);
+                        let accel = Accel::from_bytes(fifo_buf[22..28].try_into().unwrap())
+                            .scaled(ACCEL_SCALE);
+
+                        signal.signal(ImuData {
+                            accel: accel_to_tri(&accel),
+                            gyro: gyro_to_tri(&gyro),
+                            // Add your calculated orientation fields to ImuData here, e.g.:
+                            // yaw: ypr.yaw,
+                            // pitch: ypr.pitch,
+                            // roll: ypr.roll,
+                        });
+
+                        i += 1;
+                        if i > 100 {
+                            info!(
+                                "{:04} {}, {}, {}, {}",
+                                &fifo_count, gravity, ypr, accel, gyro
+                            );
+                            i = 0;
+                        }
+                    }
+                }
+            }
+        }
+        // info!("{:04}",fifo_count);
+
         // push sample to your data channel
         embassy_time::Timer::after_millis(10).await; // ~100Hz poll
     }

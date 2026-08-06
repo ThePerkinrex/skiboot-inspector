@@ -173,7 +173,12 @@ async fn main(spawner: Spawner) -> ! {
                         async {
                             loop {
                                 let data = imu::STATUS_CHANNEL.wait().await;
-                                server.motion_service.imu_status.notify(&conn, &data).await.unwrap();
+                                server
+                                    .motion_service
+                                    .imu_status
+                                    .notify(&conn, &data)
+                                    .await
+                                    .unwrap();
                             }
                         },
                     ),

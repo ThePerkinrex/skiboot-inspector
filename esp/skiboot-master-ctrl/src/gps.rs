@@ -36,7 +36,7 @@ pub async fn gps_task(mut uart: Uart<'static, esp_hal::Async>) {
                 continue; // drop this chunk, keep the task alive
             }
         };
-		
+
         info!("[GPS] read: {=[u8]:a}", &buf[..n]);
         for result in parser.parse_from_bytes(&buf[..n]) {
             match result {
