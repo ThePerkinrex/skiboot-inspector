@@ -8,6 +8,7 @@ anyhow = "1.0.104"
 bt-constants = {path = "../../esp/bt-constants"}
 btleplug = "0.12.0"
 bytemuck = { version = "1.25.2", features = ["derive"] }
+cgmath = "0.18.0"
 log = "0.4.33"
 rand = "0.10.2"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }
