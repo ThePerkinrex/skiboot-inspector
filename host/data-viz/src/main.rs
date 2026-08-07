@@ -2,9 +2,10 @@ mod app;
 mod camera;
 mod imu;
 mod instance;
+mod model;
+mod resources;
 mod state;
 mod texture;
-mod vertex;
 
 use tracing::info;
 

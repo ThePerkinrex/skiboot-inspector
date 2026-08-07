@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use cgmath::prelude::*;
+use cgmath::{Quaternion, Vector3, prelude::*};
 use wgpu::util::DeviceExt;
 use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window};
 
 use crate::{
-    camera::{Camera, CameraUniform},
+    camera::{Camera, CameraController, CameraUniform},
     instance::{Instance, InstanceRaw},
+    model::{Model, ModelVertex, Vertex},
+    resources::{load_model, static_loader::StaticLoader},
     texture::{self, Texture},
-    vertex::{INDICES, VERTICES, Vertex},
 };
 
 pub struct State {
@@ -19,16 +20,18 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    // vertex_buffer: wgpu::Buffer,
+    // index_buffer: wgpu::Buffer,
+    // num_indices: u32,
     camera: Camera,
+    camera_controller: CameraController,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
     depth_texture: Texture,
+    model: Model,
 }
 
 impl State {
@@ -104,17 +107,17 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
+        // let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Vertex Buffer"),
+        //     contents: bytemuck::cast_slice(VERTICES),
+        //     usage: wgpu::BufferUsages::VERTEX,
+        // });
+        // let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Index Buffer"),
+        //     contents: bytemuck::cast_slice(INDICES),
+        //     usage: wgpu::BufferUsages::INDEX,
+        // });
+        // let num_indices = INDICES.len() as u32;
         // let num_vertices = VERTICES.len() as u32;
 
         let camera = Camera {
@@ -180,7 +183,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"), // 1.
-                buffers: &[Some(Vertex::desc()), Some(InstanceRaw::desc())], // 2.
+                buffers: &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())], // 2.
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -228,7 +231,7 @@ impl State {
                 position: cgmath::Vector3 {
                     x: -1.0,
                     y: -1.0,
-                    z: -2.0,
+                    z: -10.0,
                 },
                 rotation: cgmath::Quaternion::zero(),
                 color: [0.8, 0.1, 0.1],
@@ -237,7 +240,7 @@ impl State {
                 position: cgmath::Vector3 {
                     x: 1.0,
                     y: -1.0,
-                    z: -2.0,
+                    z: -10.0,
                 },
                 rotation: cgmath::Quaternion::zero(),
                 color: [0.1, 0.8, 0.1],
@@ -251,6 +254,21 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let loader = StaticLoader::new();
+        // model boot_lala.obj maxmins: ((122.250694, 82.61074), (67.0, 58.0), (61.29672, 20.024784))
+        let model = load_model(
+            "boot_lala.obj",
+            &loader,
+            &device,
+            &queue,
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(-82.61074, -58.0, -20.024784),
+            Quaternion::one(),
+        )
+        .await?;
+
+        let camera_controller = CameraController::new(0.2);
+
         Ok(Self {
             surface,
             device,
@@ -259,16 +277,18 @@ impl State {
             is_surface_configured: false,
             render_pipeline,
             window,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
+            // vertex_buffer,
+            // index_buffer,
+            // num_indices,
             camera,
+            camera_controller,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
             instances,
             instance_buffer,
             depth_texture,
+            model,
         })
     }
 
@@ -350,13 +370,16 @@ impl State {
                 multiview_mask: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
-
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+
+            use crate::model::DrawModel;
+            render_pass.draw_model_instanced(
+                &self.model,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+            );
         }
 
         // submit will accept anything that implements IntoIter
@@ -366,14 +389,16 @@ impl State {
         Ok(())
     }
 
-    pub fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        match (code, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            _ => {}
+    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        if code == KeyCode::Escape && is_pressed {
+            event_loop.exit();
+        } else {
+            self.camera_controller.handle_key(code, is_pressed);
         }
     }
 
     pub fn update(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
         if self.camera_uniform.update_view_proj(&self.camera) {
             self.queue.write_buffer(
                 &self.camera_buffer,

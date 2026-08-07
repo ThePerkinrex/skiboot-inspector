@@ -476,6 +476,8 @@ dependencies = [
  "cgmath",
  "log",
  "rand",
+ "thiserror 2.0.19",
+ "tobj",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2085,11 +2087,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tobj"
+version = "4.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6eb8e04167c1c0c76b5de63226fd733485ad63ef71e40de31e16272f47b099e2"
+dependencies = [
+ "log",
+ "tokio",
+]
+
+[[package]]
 name = "tokio"
 version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
 dependencies = [
+ "bytes",
  "libc",
  "mio",
  "pin-project-lite",
