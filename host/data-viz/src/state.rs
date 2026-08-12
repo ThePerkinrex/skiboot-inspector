@@ -420,13 +420,14 @@ impl State {
 
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
         match (code, is_pressed) {
-            (KeyCode::Escape, true) => {event_loop.exit();}
+            (KeyCode::Escape, true) => {
+                event_loop.exit();
+            }
             (KeyCode::Space, true) => {
                 self.set_double(!self.is_double());
             }
             (code, is_pressed) => {
-
-            self.camera_controller.handle_key(code, is_pressed);
+                self.camera_controller.handle_key(code, is_pressed);
             }
         }
     }
@@ -447,7 +448,15 @@ impl State {
                 * instance.rotation;
         }
 
-        let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        self.queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&instance_data));
+        let instance_data = self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data),
+        );
     }
 }

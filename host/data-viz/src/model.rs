@@ -65,7 +65,7 @@ pub struct ModelTransformUniform {
 
 impl ModelTransformUniform {
     pub fn new(transform: &ModelTransform) -> Self {
-		let normal3: cgmath::Matrix3<f32> = transform.build_normal_matrix();
+        let normal3: cgmath::Matrix3<f32> = transform.build_normal_matrix();
         let normal = [
             [normal3.x.x, normal3.x.y, normal3.x.z, 0.0],
             [normal3.y.x, normal3.y.y, normal3.y.z, 0.0],
@@ -79,7 +79,7 @@ impl ModelTransformUniform {
 
     /// returns whether the view has updated
     pub fn update_transform(&mut self, transform: &ModelTransform) -> bool {
-		let normal3: cgmath::Matrix3<f32> = transform.build_normal_matrix();
+        let normal3: cgmath::Matrix3<f32> = transform.build_normal_matrix();
         let new_normal = [
             [normal3.x.x, normal3.x.y, normal3.x.z, 0.0],
             [normal3.y.x, normal3.y.y, normal3.y.z, 0.0],
@@ -175,7 +175,7 @@ where
     ) {
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-		self.set_bind_group(0, camera_bind_group, &[]);
+        self.set_bind_group(0, camera_bind_group, &[]);
         self.set_bind_group(1, model_bind_group, &[]);
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
