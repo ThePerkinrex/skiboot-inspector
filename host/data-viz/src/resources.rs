@@ -22,19 +22,20 @@ use std::{io::Cursor, path::Path};
 use cgmath::{Matrix4, One, Quaternion, Vector3, Zero};
 use tokio::io::BufReader;
 use tracing::info;
-use wgpu::util::DeviceExt;
+use wgpu::{BindGroupLayout, util::DeviceExt};
 
-use crate::model;
+use crate::model::{self, ModelTransform, ModelTransformUniform};
 
 pub async fn load_model<P, L>(
     file_name: P,
     loader: &L,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    scale: Vector3<f32>,
-    translate: Vector3<f32>,
-    rotate: Quaternion<f32>,
-    // layout: &wgpu::BindGroupLayout,
+    transform: ModelTransform,
+    bind_group_layout: &BindGroupLayout, // scale: Vector3<f32>,
+                                         // translate: Vector3<f32>,
+                                         // rotate: Quaternion<f32>,
+                                         // layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<model::Model>
 where
     P: AsRef<Path>,
@@ -152,9 +153,32 @@ where
         .collect::<Vec<_>>();
     info!("model {} maxmins: {maxmin:?}", file_name.as_ref().display());
 
-    let transform = Matrix4::from_translation(translate)
-        * Matrix4::from(rotate)
-        * Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
+    // let transform = Matrix4::from_translation(translate)
+    //     * Matrix4::from(rotate)
+    //     * Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
 
-    Ok(model::Model { meshes, transform })
+    let uniform = ModelTransformUniform::new(&transform);
+
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Model Buffer"),
+        contents: bytemuck::cast_slice(&[uniform]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+        label: Some("model_bind_group"),
+    });
+
+    Ok(model::Model {
+        meshes,
+        uniform,
+        transform,
+        bind_group,
+        buffer,
+    })
 }

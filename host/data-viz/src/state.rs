@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use cgmath::{Quaternion, Vector3, prelude::*};
+use cgmath::{Deg, Quaternion, Rad, Vector3, prelude::*};
 use wgpu::util::DeviceExt;
 use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window};
 
 use crate::{
     camera::{Camera, CameraController, CameraUniform},
     instance::{Instance, InstanceRaw},
-    model::{Model, ModelVertex, Vertex},
+    model::{Model, ModelTransform, ModelVertex, Vertex},
     resources::{load_model, static_loader::StaticLoader},
     texture::{self, Texture},
 };
@@ -167,13 +167,19 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
+        let model_bind_group_layout =
+            device.create_bind_group_layout(&Model::bind_group_layout_desc());
+
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[Some(&camera_bind_group_layout)],
+                bind_group_layouts: &[
+                    Some(&camera_bind_group_layout),
+                    Some(&model_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
 
@@ -226,23 +232,26 @@ impl State {
             cache: None,          // 6.
         });
 
+        let center = cgmath::Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                };
+        let offset = cgmath::Vector3 {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 0.0,
+                };
+
         let instances = vec![
             Instance {
-                position: cgmath::Vector3 {
-                    x: -1.0,
-                    y: -1.0,
-                    z: -10.0,
-                },
-                rotation: cgmath::Quaternion::zero(),
+                position: center+offset,
+                rotation: cgmath::Quaternion::one(),
                 color: [0.8, 0.1, 0.1],
             },
             Instance {
-                position: cgmath::Vector3 {
-                    x: 1.0,
-                    y: -1.0,
-                    z: -10.0,
-                },
-                rotation: cgmath::Quaternion::zero(),
+                position: center-offset,
+                rotation: cgmath::Quaternion::one(),
                 color: [0.1, 0.8, 0.1],
             },
         ];
@@ -261,9 +270,12 @@ impl State {
             &loader,
             &device,
             &queue,
-            Vector3::new(1.0, 1.0, 1.0),
-            Vector3::new(-82.61074, -58.0, -20.024784),
-            Quaternion::one(),
+            ModelTransform {
+                scale: Vector3::new(0.02, 0.02, 0.02), // ~41 * 0.04 ≈ 1.65
+                translate: Vector3::new(-102.430_72, -62.5, -40.660_75),
+                rotate: Quaternion::from_angle_y(Deg(-90.0)) * Quaternion::from_angle_x(Deg(90.0)),
+            },
+            &model_bind_group_layout,
         )
         .await?;
 

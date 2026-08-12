@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use cgmath::{Matrix4, Quaternion, Vector3};
+use wgpu::{BindGroup, BindGroupLayoutDescriptor, Buffer};
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -35,9 +36,70 @@ impl Vertex for ModelVertex {
     }
 }
 
+pub struct ModelTransform {
+    pub translate: cgmath::Vector3<f32>,
+    pub rotate: cgmath::Quaternion<f32>,
+    pub scale: cgmath::Vector3<f32>,
+}
+
+impl ModelTransform {
+    pub fn build_transform_matrix(&self) -> cgmath::Matrix4<f32> {
+        Matrix4::from(self.rotate)
+        * Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, self.scale.z)
+        * Matrix4::from_translation(self.translate)
+    }
+}
+
+// We need this for Rust to store our data correctly for the shaders
+#[repr(C)]
+// This is so we can store this in a buffer
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ModelTransformUniform {
+    pub transform: [[f32; 4]; 4],
+}
+
+impl ModelTransformUniform {
+    pub fn new(transform: &ModelTransform) -> Self {
+        Self {
+            transform: transform.build_transform_matrix().into(),
+        }
+    }
+
+    /// returns whether the view has updated
+    pub fn update_transform(&mut self, transform: &ModelTransform) -> bool {
+        let new = transform.build_transform_matrix().into();
+        if self.transform == new {
+            return false;
+        }
+        self.transform = new;
+        true
+    }
+}
+
 pub struct Model {
     pub meshes: Vec<Mesh>,
-    pub transform: Matrix4<f32>,
+    pub transform: ModelTransform,
+    pub uniform: ModelTransformUniform,
+    pub bind_group: BindGroup,
+    pub buffer: Buffer,
+}
+
+impl Model {
+    pub const fn bind_group_layout_desc() -> BindGroupLayoutDescriptor<'static> {
+        wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("model_bind_group_layout"),
+        }
+    }
 }
 
 pub struct Mesh {
@@ -50,12 +112,18 @@ pub struct Mesh {
 
 // model.rs
 pub trait DrawModel<'a> {
-    fn draw_mesh(&mut self, mesh: &'a Mesh, camera_bind_group: &'a wgpu::BindGroup);
+    fn draw_mesh(
+        &mut self,
+        mesh: &'a Mesh,
+        camera_bind_group: &'a wgpu::BindGroup,
+        model_bind_group: &'a wgpu::BindGroup,
+    );
     fn draw_mesh_instanced(
         &mut self,
         mesh: &'a Mesh,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
+        model_bind_group: &'a wgpu::BindGroup,
     );
     fn draw_model(&mut self, model: &'a Model, camera_bind_group: &'a wgpu::BindGroup);
     fn draw_model_instanced(
@@ -69,8 +137,13 @@ impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
 where
     'b: 'a,
 {
-    fn draw_mesh(&mut self, mesh: &'b Mesh, camera_bind_group: &'a wgpu::BindGroup) {
-        self.draw_mesh_instanced(mesh, 0..1, camera_bind_group);
+    fn draw_mesh(
+        &mut self,
+        mesh: &'b Mesh,
+        camera_bind_group: &'a wgpu::BindGroup,
+        model_bind_group: &'a wgpu::BindGroup,
+    ) {
+        self.draw_mesh_instanced(mesh, 0..1, camera_bind_group, model_bind_group);
     }
 
     fn draw_mesh_instanced(
@@ -78,9 +151,11 @@ where
         mesh: &'b Mesh,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
+        model_bind_group: &'a wgpu::BindGroup,
     ) {
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        self.set_bind_group(1, model_bind_group, &[]);
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 
@@ -96,7 +171,12 @@ where
     ) {
         for mesh in &model.meshes {
             // let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(mesh, instances.clone(), camera_bind_group);
+            self.draw_mesh_instanced(
+                mesh,
+                instances.clone(),
+                camera_bind_group,
+                &model.bind_group,
+            );
         }
     }
 }
