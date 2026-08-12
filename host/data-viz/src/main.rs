@@ -6,6 +6,7 @@ mod model;
 mod resources;
 mod state;
 mod texture;
+mod light;
 
 use tracing::info;
 

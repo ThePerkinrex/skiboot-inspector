@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 
 use cgmath::{Deg, Quaternion, Rad, Vector3, prelude::*};
 use wgpu::util::DeviceExt;
@@ -29,6 +29,7 @@ pub struct State {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
+    instance_range: Range<u32>,
     instance_buffer: wgpu::Buffer,
     depth_texture: Texture,
     model: Model,
@@ -233,34 +234,41 @@ impl State {
         });
 
         let center = cgmath::Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                };
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
         let offset = cgmath::Vector3 {
-                    x: 0.5,
-                    y: 0.0,
-                    z: 0.0,
-                };
+            x: 0.5,
+            y: 0.0,
+            z: 0.0,
+        };
 
         let instances = vec![
             Instance {
-                position: center+offset,
+                position: center + offset,
                 rotation: cgmath::Quaternion::one(),
-                color: [0.8, 0.1, 0.1],
+                color: [0.8, 0.2, 0.1],
             },
             Instance {
-                position: center-offset,
+                position: center - offset,
                 rotation: cgmath::Quaternion::one(),
-                color: [0.1, 0.8, 0.1],
+                color: [0.2, 0.8, 0.1],
+            },
+            Instance {
+                position: center,
+                rotation: cgmath::Quaternion::one(),
+                color: [0.5, 0.5, 0.1],
             },
         ];
+
+        let instance_range = 0..2;
 
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let loader = StaticLoader::new();
@@ -298,6 +306,7 @@ impl State {
             camera_buffer,
             camera_bind_group,
             instances,
+            instance_range,
             instance_buffer,
             depth_texture,
             model,
@@ -314,6 +323,14 @@ impl State {
             self.depth_texture =
                 texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
         }
+    }
+
+    pub const fn set_double(&mut self, is_double: bool) {
+        self.instance_range = if is_double { 0..2 } else { 2..3 }
+    }
+
+    pub fn is_double(&self) -> bool {
+        self.instance_range == (0..2)
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -389,7 +406,7 @@ impl State {
             use crate::model::DrawModel;
             render_pass.draw_model_instanced(
                 &self.model,
-                0..self.instances.len() as u32,
+                self.instance_range.clone(),
                 &self.camera_bind_group,
             );
         }
@@ -402,10 +419,15 @@ impl State {
     }
 
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if code == KeyCode::Escape && is_pressed {
-            event_loop.exit();
-        } else {
+        match (code, is_pressed) {
+            (KeyCode::Escape, true) => {event_loop.exit();}
+            (KeyCode::Space, true) => {
+                self.set_double(!self.is_double());
+            }
+            (code, is_pressed) => {
+
             self.camera_controller.handle_key(code, is_pressed);
+            }
         }
     }
 
@@ -418,5 +440,14 @@ impl State {
                 bytemuck::cast_slice(&[self.camera_uniform]),
             );
         }
+
+        for instance in self.instances.iter_mut() {
+            instance.rotation = Quaternion::from_angle_y(Deg(2.0))
+                * Quaternion::from_angle_x(Deg(2.0))
+                * instance.rotation;
+        }
+
+        let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        self.queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&instance_data));
     }
 }

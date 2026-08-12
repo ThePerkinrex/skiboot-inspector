@@ -45,8 +45,12 @@ pub struct ModelTransform {
 impl ModelTransform {
     pub fn build_transform_matrix(&self) -> cgmath::Matrix4<f32> {
         Matrix4::from(self.rotate)
-        * Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, self.scale.z)
-        * Matrix4::from_translation(self.translate)
+            * Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, self.scale.z)
+            * Matrix4::from_translation(self.translate)
+    }
+
+    pub fn build_normal_matrix(&self) -> cgmath::Matrix3<f32> {
+        cgmath::Matrix3::from(self.rotate).into()
     }
 }
 
@@ -55,23 +59,39 @@ impl ModelTransform {
 // This is so we can store this in a buffer
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ModelTransformUniform {
-    pub transform: [[f32; 4]; 4],
+    transform: [[f32; 4]; 4],
+    normal: [[f32; 4]; 3], // pad each column to vec4 for WGSL alignment
 }
 
 impl ModelTransformUniform {
     pub fn new(transform: &ModelTransform) -> Self {
+		let normal3: cgmath::Matrix3<f32> = transform.build_normal_matrix();
+        let normal = [
+            [normal3.x.x, normal3.x.y, normal3.x.z, 0.0],
+            [normal3.y.x, normal3.y.y, normal3.y.z, 0.0],
+            [normal3.z.x, normal3.z.y, normal3.z.z, 0.0],
+        ];
         Self {
             transform: transform.build_transform_matrix().into(),
+            normal,
         }
     }
 
     /// returns whether the view has updated
     pub fn update_transform(&mut self, transform: &ModelTransform) -> bool {
-        let new = transform.build_transform_matrix().into();
-        if self.transform == new {
+		let normal3: cgmath::Matrix3<f32> = transform.build_normal_matrix();
+        let new_normal = [
+            [normal3.x.x, normal3.x.y, normal3.x.z, 0.0],
+            [normal3.y.x, normal3.y.y, normal3.y.z, 0.0],
+            [normal3.z.x, normal3.z.y, normal3.z.z, 0.0],
+        ];
+        let new_transform = transform.build_transform_matrix().into();
+
+        if self.transform == new_transform && self.normal == new_normal {
             return false;
         }
-        self.transform = new;
+        self.transform = new_transform;
+        self.normal = new_normal;
         true
     }
 }
@@ -155,6 +175,7 @@ where
     ) {
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+		self.set_bind_group(0, camera_bind_group, &[]);
         self.set_bind_group(1, model_bind_group, &[]);
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
