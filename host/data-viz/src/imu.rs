@@ -1,5 +1,5 @@
 use bt_constants::imu_conf::{ImuCommand, ImuStatus};
-use bt_constants::{FromBytesLe, ImuData};
+use bt_constants::{ByteSize, FromBytesLe, ImuData};
 use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use std::time::Duration;
@@ -7,22 +7,24 @@ use tokio::time;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
 
-#[derive(Debug)]
-struct TriI16 {
-    x: i16,
-    y: i16,
-    z: i16,
-}
+// #[derive(Debug)]
+// struct TriI16 {
+//     x: i16,
+//     y: i16,
+//     z: i16,
+// }
 
-impl FromBytesLe<6> for TriI16 {
-    fn from_le_bytes(x: &[u8; 6]) -> Self {
-        Self {
-            x: i16::from_le_bytes(x[0..2].try_into().unwrap()),
-            y: i16::from_le_bytes(x[2..4].try_into().unwrap()),
-            z: i16::from_le_bytes(x[4..6].try_into().unwrap()),
-        }
-    }
-}
+// impl FromBytesLe<6> for TriI16 {
+//     fn from_le_bytes(x: &[u8; 6]) -> Self {
+//         Self {
+//             x: i16::from_le_bytes(x[0..2].try_into().unwrap()),
+//             y: i16::from_le_bytes(x[2..4].try_into().unwrap()),
+//             z: i16::from_le_bytes(x[4..6].try_into().unwrap()),
+//         }
+//     }
+// }
+
+type TriI16 = [i16;3];
 
 #[derive(Debug)]
 struct Status {
@@ -31,12 +33,16 @@ struct Status {
     gyro: TriI16,
 }
 
-impl FromBytesLe<32> for Status {
-    fn from_le_bytes(x: &[u8; 32]) -> Self {
+impl ByteSize for Status {
+    const SIZE: usize = 32;
+}
+
+impl FromBytesLe for Status {
+    fn from_le_bytes(x: &[u8]) -> Self {
         Self {
             status: ImuStatus::from(x[0]),
-            accel: TriI16::from_le_bytes_slice(&x[1..7]).unwrap(),
-            gyro: TriI16::from_le_bytes_slice(&x[7..13]).unwrap(),
+            accel: TriI16::from_le_bytes(&x[1..7]),
+            gyro: TriI16::from_le_bytes(&x[7..13]),
         }
     }
 }
@@ -91,7 +97,7 @@ pub async fn run() -> anyhow::Result<()> {
     light.subscribe(&data_char).await.expect("subscribe");
 
     let a = light.read(&status_char).await.unwrap();
-    let status = Status::from_le_bytes_slice(&a).unwrap();
+    let status = Status::from_le_bytes(&a);
     info!("STATUS: {:?}", status);
 
     let light_clone = light.clone();
@@ -114,13 +120,13 @@ pub async fn run() -> anyhow::Result<()> {
     let mut status_count = -2;
     while let Some(a) = nots.next().await {
         if a.uuid == bt_constants::IMU_DATA_CHAR_UUID {
-            let imu = ImuData::from_le_bytes_slice(&a.value).unwrap();
+            let imu = ImuData::from_le_bytes(&a.value);
             info!("IMU: {:?}", imu);
             if status_count >= 0 {
                 status_count += 1;
             }
         } else if a.uuid == bt_constants::IMU_STATUS_CHAR_UUID {
-            let status = Status::from_le_bytes_slice(&a.value).unwrap();
+            let status = Status::from_le_bytes(&a.value);
             info!("STATUS: {:?}", status);
             if status.status == ImuStatus::Calibrating {
                 status_count = -1;
