@@ -1,6 +1,7 @@
 mod app;
 mod imu;
 
+use cgmath::{One, Quaternion};
 use tracing::info;
 use winit::event_loop::EventLoop;
 
@@ -19,9 +20,11 @@ fn main() -> anyhow::Result<()> {
     info!("Initialized logging");
     log::info!("Hello from log");
 
+    let (tx, rx) = tokio::sync::watch::channel(Quaternion::<f32>::one());
+    rt.spawn(async move { imu::run(tx).await.unwrap() });
     let event_loop = EventLoop::with_user_event().build()?;
 
-    let mut app = App::new(handle, event_loop.create_proxy());
+    let mut app = App::new(handle, event_loop.create_proxy(), rx);
     event_loop.run_app(&mut app)?;
     // imu::run().await?;
 

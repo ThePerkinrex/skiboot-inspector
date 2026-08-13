@@ -4,8 +4,7 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use bt_constants::{
-    ImuData, ToBytesLe, Tri,
-    imu_conf::{FromPrimitive, ImuCommand, ImuStatus, IntoPrimitive},
+    ByteSize, ImuData, ToBytesLe, Tri, imu_conf::{FromPrimitive, ImuCommand, ImuStatus, IntoPrimitive},
 };
 use defmt::info;
 use embassy_executor::Spawner;
@@ -151,7 +150,7 @@ pub async fn imu_task(
         }
     };
     let mpu = MPU.init(sensor); // full struct moved out of the async fn's own state
-    mpu.set_sample_rate_divider(9).await.unwrap();
+    mpu.set_sample_rate_divider(14).await.unwrap();
     mpu.set_digital_lowpass_filter(DigitalLowPassFilter::Filter1)
         .await
         .unwrap();
@@ -179,6 +178,7 @@ pub async fn imu_task(
             match cmd {
                 ImuCommand::Calibrate => {
                     status.set_status(ImuStatus::Calibrating);
+                    info!("Calibrating!");
                     status.signal();
                     let data = mpu
                         .calibrate(
@@ -239,10 +239,10 @@ pub async fn imu_task(
                     // info!("quat: {}", Quaternion::from_bytes(&fifo_buf[..16]));
                     if let Some(quat) = Quaternion::from_bytes(&fifo_buf[..16]) {
                         // Calculate gravity vector from quaternion
-                        let gravity = mpu6050_dmp::gravity::Gravity::from(quat);
+                        // let gravity = mpu6050_dmp::gravity::Gravity::from(quat);
 
-                        // Calculate Yaw, Pitch, Roll in radians
-                        let ypr = YawPitchRoll::from(quat);
+                        // // Calculate Yaw, Pitch, Roll in radians
+                        // let ypr = YawPitchRoll::from(quat);
 
                         // If you still need calibrated accel/gyro along with orientation:
                         let gyro = Gyro::from_bytes(fifo_buf[16..22].try_into().unwrap())
@@ -253,8 +253,7 @@ pub async fn imu_task(
                         signal.signal(ImuData {
                             accel: accel_to_tri(&accel),
                             gyro: gyro_to_tri(&gyro),
-                            ypr: ypr_to_tri(&ypr),
-                            gravity: gravity_to_tri(&gravity)
+                            quat: [quat.w, quat.y, quat.y, quat.z]
                             // Add your calculated orientation fields to ImuData here, e.g.:
                             // yaw: ypr.yaw,
                             // pitch: ypr.pitch,
@@ -262,10 +261,10 @@ pub async fn imu_task(
                         });
 
                         i += 1;
-                        if i > 100 {
+                        if i > 1000 {
                             info!(
-                                "{:04} {}, {}, {}, {}",
-                                &fifo_count, gravity, ypr, accel, gyro
+                                "{:04} {}, {}, {}",
+                                &fifo_count, quat, accel, gyro
                             );
                             i = 0;
                         }
@@ -282,8 +281,8 @@ pub async fn imu_task(
 
 #[gatt_service(uuid = bt_constants::MOTION_SERVICE_UUID)]
 pub struct MotionService {
-    #[characteristic(uuid = bt_constants::IMU_DATA_CHAR_UUID, read, notify, value = [0; 24])]
-    pub imu_data: [u8; 24],
+    #[characteristic(uuid = bt_constants::IMU_DATA_CHAR_UUID, read, notify, value = [0; ImuData::SIZE])]
+    pub imu_data: [u8; ImuData::SIZE],
     #[characteristic(uuid = bt_constants::IMU_CONF_CHAR_UUID, write)]
     pub imu_conf: [u8; 8],
     #[characteristic(uuid = bt_constants::IMU_STATUS_CHAR_UUID, read, notify, value = [0; 32])]

@@ -1,6 +1,7 @@
 use std::{ops::Range, sync::Arc};
 
-use cgmath::{Deg, Quaternion, Vector3, One, Rotation3};
+use cgmath::{Deg, InnerSpace, One, Quaternion, Rotation3, Vector3};
+use tracing::info;
 use wgpu::util::DeviceExt;
 use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window};
 
@@ -36,6 +37,7 @@ pub struct State {
     model: Model,
     rt: tokio::runtime::Handle,
     proxy: Arc<dyn EventSender<UserEvent, Error = ()> + Sync + Send>,
+    rx: tokio::sync::watch::Receiver<Quaternion<f32>>,
 }
 
 impl State {
@@ -45,7 +47,10 @@ impl State {
         window: Arc<Window>,
         rt: tokio::runtime::Handle,
         proxy: Arc<dyn EventSender<UserEvent, Error = ()> + Sync + Send>,
+        rx: tokio::sync::watch::Receiver<Quaternion<f32>>,
     ) -> anyhow::Result<Self> {
+        info!("Creating state!");
+
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -269,7 +274,7 @@ impl State {
             },
         ];
 
-        let instance_range = 0..2;
+        let instance_range = 2..3;
 
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -295,6 +300,7 @@ impl State {
         .await?;
 
         let camera_controller = CameraController::new(0.2);
+        info!("Created state!");
 
         Ok(Self {
             surface,
@@ -319,6 +325,7 @@ impl State {
             model,
             rt,
             proxy,
+            rx,
         })
     }
 
@@ -347,8 +354,10 @@ impl State {
 
         // We can't render unless the surface is configured
         if !self.is_surface_configured {
+            info!("No surface configured!");
             return Ok(());
         }
+        // info!("Render!");
 
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
@@ -424,6 +433,8 @@ impl State {
         self.queue.submit(std::iter::once(encoder.finish()));
         self.queue.present(output);
 
+        // info!("Rendered");
+
         Ok(())
     }
 
@@ -453,21 +464,26 @@ impl State {
             );
         }
 
-        for instance in self.instances.iter_mut() {
-            instance.rotation = Quaternion::from_angle_y(Deg(2.0))
-                * Quaternion::from_angle_x(Deg(2.0))
-                * instance.rotation;
-        }
+        if matches!(self.rx.has_changed(), Ok(true)) {
+            for instance in self.instances[0..2].iter_mut() {
+                instance.rotation = Quaternion::from_angle_y(Deg(2.0))
+                    * Quaternion::from_angle_x(Deg(2.0))
+                    * instance.rotation;
+            }
 
-        let instance_data = self
-            .instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-        self.queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::cast_slice(&instance_data),
-        );
+            self.instances[2].rotation = self.rx.borrow_and_update().normalize();
+
+            let instance_data = self
+                .instances
+                .iter()
+                .map(Instance::to_raw)
+                .collect::<Vec<_>>();
+            self.queue.write_buffer(
+                &self.instance_buffer,
+                0,
+                bytemuck::cast_slice(&instance_data),
+            );
+        }
+        // info!("Update");
     }
 }

@@ -9,6 +9,8 @@ mod texture;
 
 use std::sync::Arc;
 
+use cgmath::Quaternion;
+use tracing::info;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -26,35 +28,44 @@ pub struct App {
     state: Option<State>,
     rt: tokio::runtime::Handle,
     proxy: EventLoopProxy<AppEvent>,
+    rx: Option<tokio::sync::watch::Receiver<Quaternion<f32>>>,
 }
 
 impl App {
-    pub const fn new(rt: tokio::runtime::Handle, proxy: EventLoopProxy<AppEvent>) -> Self {
+    pub const fn new(
+        rt: tokio::runtime::Handle,
+        proxy: EventLoopProxy<AppEvent>,
+        rx: tokio::sync::watch::Receiver<Quaternion<f32>>,
+    ) -> Self {
         Self {
             state: None,
             rt,
             proxy,
+            rx: Some(rx),
         }
     }
 }
 
 impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        info!("Starting window");
+
         let window_attributes = Window::default_attributes().with_title("SkiBoot Viz");
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        // If we are not on web we can use pollster to
-        // await the window creation
-
-        let (rt, proxy) = (self.rt.clone(), self.proxy.clone());
+        let rt = self.rt.clone();
         let user_proxy = Arc::new(self.proxy.map(AppEvent::User));
+        let rx = self.rx.take().unwrap();
 
-        self.rt.spawn(async move {
-            proxy.send_event(AppEvent::State(Box::new(
-                State::new(window, rt, user_proxy).await.unwrap(),
-            )))
-        });
+        info!("Blocking for state");
+
+        self.state = Some(self.rt
+            .block_on(async move {
+                State::new(window, rt, user_proxy, rx).await
+            })
+            .unwrap());
+        info!("Blocked for state");
 
         // self.state = Some(
         //     tokio::runtime::Handle::current()
@@ -64,8 +75,9 @@ impl ApplicationHandler<AppEvent> for App {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
+        info!("Event received: {event:?}");
         match event {
-            AppEvent::State(state) => self.state = Some(*state),
+            // AppEvent::State(state) => self.state = Some(*state),
             AppEvent::User(user) => {
                 let state = match &mut self.state {
                     Some(canvas) => canvas,
@@ -83,6 +95,7 @@ impl ApplicationHandler<AppEvent> for App {
         window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
+        // info!("window event! {event:?}");
         let state = match &mut self.state {
             Some(canvas) => canvas,
             None => return,

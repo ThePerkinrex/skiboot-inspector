@@ -54,8 +54,18 @@ where
 }
 
 pub enum AppEvent {
-    State(Box<State>),
+    // State(Box<State>),
     User(UserEvent),
 }
 
+impl std::fmt::Debug for AppEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            // Self::State(_) => f.debug_tuple("State").finish(),
+            Self::User(arg0) => f.debug_tuple("User").field(arg0).finish(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum UserEvent {}

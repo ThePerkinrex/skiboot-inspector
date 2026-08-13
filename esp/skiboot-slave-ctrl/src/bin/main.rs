@@ -167,7 +167,9 @@ async fn main(spawner: Spawner) -> ! {
                         async {
                             loop {
                                 let data = IMU_SIGNAL.wait().await;
-                                imu.notify(&conn, &data.to_bytes_le()).await.unwrap();
+                                let mut buf = [0; <ImuData as bt_constants::ByteSize>::SIZE]; 
+                                data.to_bytes_le(&mut buf);
+                                imu.notify(&conn, &buf).await.unwrap();
                             }
                         },
                         async {

@@ -2,6 +2,7 @@ use bt_constants::imu_conf::{ImuCommand, ImuStatus};
 use bt_constants::{ByteSize, FromBytesLe, ImuData};
 use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::{Adapter, Manager, Peripheral};
+use cgmath::Quaternion;
 use std::time::Duration;
 use tokio::time;
 use tokio_stream::StreamExt;
@@ -47,7 +48,35 @@ impl FromBytesLe for Status {
     }
 }
 
-pub async fn run() -> anyhow::Result<()> {
+pub struct BleController {
+    adapter: Adapter,
+}
+
+impl BleController {
+    pub async fn new() -> anyhow::Result<Self> {
+        let manager = Manager::new().await.unwrap();
+
+        // get the first bluetooth adapter
+        let adapters = manager.adapters().await?;
+        let adapter = adapters
+            .into_iter()
+            .nth(0)
+            .ok_or_else(|| anyhow::anyhow!("No adapter found"))?;
+        Ok(Self { adapter })
+    }
+
+    pub async fn start_scan(&self, filter: ScanFilter) -> anyhow::Result<()> {
+        self.adapter.start_scan(ScanFilter::default()).await?;
+
+        Ok(())
+    }
+}
+
+pub struct BleScan<'a> {
+    adapter: &'a Adapter,
+}
+
+pub async fn run(sender: tokio::sync::watch::Sender<Quaternion<f32>>) -> anyhow::Result<()> {
     let manager = Manager::new().await.unwrap();
 
     // get the first bluetooth adapter
@@ -61,7 +90,7 @@ pub async fn run() -> anyhow::Result<()> {
     time::sleep(Duration::from_secs(2)).await;
 
     // find the device we're interested in
-    let light = find_boot(&central).await.unwrap();
+    let light = find_boot(&central).await.expect("Boot");
 
     // connect to the device
     light.connect().await?;
@@ -121,9 +150,14 @@ pub async fn run() -> anyhow::Result<()> {
     while let Some(a) = nots.next().await {
         if a.uuid == bt_constants::IMU_DATA_CHAR_UUID {
             let imu = ImuData::from_le_bytes(&a.value);
-            info!("IMU: {:?}", imu);
+            let quat = Quaternion::new(imu.quat[0], imu.quat[1], imu.quat[2], imu.quat[3]);
+            sender.send(quat).unwrap();
+            // info!("IMU: {:?}", imu);
             if status_count >= 0 {
                 status_count += 1;
+            }
+            if status_count % 20 == 0 {
+                info!("IMU: {:?}", imu);
             }
         } else if a.uuid == bt_constants::IMU_STATUS_CHAR_UUID {
             let status = Status::from_le_bytes(&a.value);
