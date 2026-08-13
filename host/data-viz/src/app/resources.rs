@@ -17,20 +17,19 @@ pub trait Loader {
 //     // texture::Texture::from_bytes(device, queue, &data, file_name)
 // }
 
-use std::{io::Cursor, path::Path};
+use std::path::Path;
 
-use cgmath::{Matrix4, One, Quaternion, Vector3, Zero};
 use tokio::io::BufReader;
 use tracing::info;
 use wgpu::{BindGroupLayout, util::DeviceExt};
 
-use crate::model::{self, ModelTransform, ModelTransformUniform};
+use crate::app::model::{self, ModelTransform, ModelTransformUniform};
 
 pub async fn load_model<P, L>(
     file_name: P,
     loader: &L,
     device: &wgpu::Device,
-    queue: &wgpu::Queue,
+    _queue: &wgpu::Queue,
     transform: ModelTransform,
     bind_group_layout: &BindGroupLayout, // scale: Vector3<f32>,
                                          // translate: Vector3<f32>,
@@ -45,7 +44,7 @@ where
     let data = loader.get_file(&file_name).await?;
     let mut obj_reader = BufReader::new(data);
 
-    let (models, obj_materials) = tobj::tokio::load_obj_buf(
+    let (models, _obj_materials) = tobj::tokio::load_obj_buf(
         &mut obj_reader,
         &tobj::LoadOptions {
             triangulate: true,
@@ -60,29 +59,29 @@ where
     .await?;
 
     // let mut materials = Vec::new();
-    for m in obj_materials? {
-        // let diffuse_texture = load_texture(&m.diffuse_texture, device, queue).await?;
-        // let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     layout,
-        //     entries: &[
-        //         wgpu::BindGroupEntry {
-        //             binding: 0,
-        //             resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 1,
-        //             resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-        //         },
-        //     ],
-        //     label: None,
-        // });
+    // for m in obj_materials? {
+    // let diffuse_texture = load_texture(&m.diffuse_texture, device, queue).await?;
+    // let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    //     layout,
+    //     entries: &[
+    //         wgpu::BindGroupEntry {
+    //             binding: 0,
+    //             resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+    //         },
+    //         wgpu::BindGroupEntry {
+    //             binding: 1,
+    //             resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+    //         },
+    //     ],
+    //     label: None,
+    // });
 
-        // materials.push(model::Material {
-        //     name: m.name,
-        //     diffuse_texture,
-        //     bind_group,
-        // })
-    }
+    // materials.push(model::Material {
+    //     name: m.name,
+    //     diffuse_texture,
+    //     bind_group,
+    // })
+    // }
     let mut maxmin = (
         (-f32::INFINITY, f32::INFINITY),
         (-f32::INFINITY, f32::INFINITY),

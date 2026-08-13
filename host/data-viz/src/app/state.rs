@@ -1,11 +1,12 @@
 use std::{ops::Range, sync::Arc};
 
-use cgmath::{Deg, Quaternion, Rad, Vector3, prelude::*};
+use cgmath::{Deg, Quaternion, Vector3, One, Rotation3};
 use wgpu::util::DeviceExt;
 use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window};
 
-use crate::{
+use crate::app::{
     camera::{Camera, CameraController, CameraUniform},
+    event::{EventSender, UserEvent},
     instance::{Instance, InstanceRaw},
     model::{Model, ModelTransform, ModelVertex, Vertex},
     resources::{load_model, static_loader::StaticLoader},
@@ -33,12 +34,18 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     depth_texture: Texture,
     model: Model,
+    rt: tokio::runtime::Handle,
+    proxy: Arc<dyn EventSender<UserEvent, Error = ()> + Sync + Send>,
 }
 
 impl State {
     // We don't need this to be async right now,
     // but we will in the next tutorial
-    pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+    pub async fn new(
+        window: Arc<Window>,
+        rt: tokio::runtime::Handle,
+        proxy: Arc<dyn EventSender<UserEvent, Error = ()> + Sync + Send>,
+    ) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -310,6 +317,8 @@ impl State {
             instance_buffer,
             depth_texture,
             model,
+            rt,
+            proxy,
         })
     }
 
@@ -403,7 +412,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
-            use crate::model::DrawModel;
+            use crate::app::model::DrawModel;
             render_pass.draw_model_instanced(
                 &self.model,
                 self.instance_range.clone(),
@@ -431,6 +440,8 @@ impl State {
             }
         }
     }
+
+    pub fn handle_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {}
 
     pub fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);

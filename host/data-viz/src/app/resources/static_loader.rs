@@ -1,12 +1,12 @@
 use thiserror::Error;
 use tracing::info;
 
-use crate::resources::Loader;
+use crate::app::resources::Loader;
 
 pub struct StaticLoader {}
 
 impl StaticLoader {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {}
     }
 }

@@ -1,5 +1,4 @@
 // use image::GenericImageView;
-use anyhow::*;
 
 pub struct Texture {
     #[allow(unused)]

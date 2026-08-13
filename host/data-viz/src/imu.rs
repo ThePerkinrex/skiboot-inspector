@@ -24,7 +24,7 @@ use tracing::{error, info};
 //     }
 // }
 
-type TriI16 = [i16;3];
+type TriI16 = [i16; 3];
 
 #[derive(Debug)]
 struct Status {

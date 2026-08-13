@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use cgmath::{Matrix4, Quaternion, Vector3};
+use cgmath::Matrix4;
 use wgpu::{BindGroup, BindGroupLayoutDescriptor, Buffer};
 
 pub trait Vertex {

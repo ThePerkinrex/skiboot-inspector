@@ -1,27 +1,44 @@
+mod camera;
+mod event;
+mod instance;
+mod light;
+mod model;
+mod resources;
+mod state;
+mod texture;
+
 use std::sync::Arc;
 
-use anyhow::Ok;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
-    keyboard::{KeyCode, PhysicalKey},
+    event_loop::{ActiveEventLoop, EventLoopProxy},
+    keyboard::PhysicalKey,
     window::Window,
 };
 
-use crate::state::State;
+use crate::app::{
+    event::{AppEvent, EventSender},
+    state::State,
+};
 
 pub struct App {
     state: Option<State>,
+    rt: tokio::runtime::Handle,
+    proxy: EventLoopProxy<AppEvent>,
 }
 
 impl App {
-    pub const fn new() -> Self {
-        Self { state: None }
+    pub const fn new(rt: tokio::runtime::Handle, proxy: EventLoopProxy<AppEvent>) -> Self {
+        Self {
+            state: None,
+            rt,
+            proxy,
+        }
     }
 }
 
-impl ApplicationHandler<State> for App {
+impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes().with_title("SkiBoot Viz");
 
@@ -30,16 +47,34 @@ impl ApplicationHandler<State> for App {
         // If we are not on web we can use pollster to
         // await the window creation
 
-        self.state = Some(
-            tokio::runtime::Handle::current()
-                .block_on(State::new(window))
-                .unwrap(),
-        );
+        let (rt, proxy) = (self.rt.clone(), self.proxy.clone());
+        let user_proxy = Arc::new(self.proxy.map(AppEvent::User));
+
+        self.rt.spawn(async move {
+            proxy.send_event(AppEvent::State(Box::new(
+                State::new(window, rt, user_proxy).await.unwrap(),
+            )))
+        });
+
+        // self.state = Some(
+        //     tokio::runtime::Handle::current()
+        //         .block_on(State::new(window))
+        //         .unwrap(),
+        // );
     }
 
-    #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
-        self.state = Some(event);
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
+        match event {
+            AppEvent::State(state) => self.state = Some(*state),
+            AppEvent::User(user) => {
+                let state = match &mut self.state {
+                    Some(canvas) => canvas,
+                    None => return,
+                };
+
+                state.handle_event(event_loop, user);
+            }
+        }
     }
 
     fn window_event(
@@ -79,14 +114,4 @@ impl ApplicationHandler<State> for App {
             _ => {}
         }
     }
-}
-
-pub fn run() -> anyhow::Result<()> {
-    tokio::task::block_in_place(|| {
-        let event_loop = EventLoop::with_user_event().build()?;
-
-        let mut app = App::new();
-        event_loop.run_app(&mut app)
-    })?;
-    Ok(())
 }
